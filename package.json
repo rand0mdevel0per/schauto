@@ -1,7 +1,7 @@
 {
-  "name": "chromium-stealth",
+  "name": "schauto",
   "version": "0.1.0",
-  "description": "Chromium-based headless browser with kernel-level fingerprint randomization. Patches Chromium source directly for undetectable Canvas/WebGL/Audio/Navigator/Timezone spoofing.",
+  "description": "Stealth Chromium automation framework with kernel-level fingerprint randomization. Patches Chromium source directly for undetectable Canvas/WebGL/Audio/Navigator/Timezone spoofing.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,6 +15,7 @@
     "LICENSE"
   ],
   "keywords": [
+    "schauto",
     "chromium",
     "headless",
     "browser",
@@ -33,12 +34,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rand0mdevel0per/chromium-stealth.git"
+    "url": "git+https://github.com/rand0mdevel0per/schauto.git"
   },
   "bugs": {
-    "url": "https://github.com/rand0mdevel0per/chromium-stealth/issues"
+    "url": "https://github.com/rand0mdevel0per/schauto/issues"
   },
-  "homepage": "https://github.com/rand0mdevel0per/chromium-stealth#readme",
+  "homepage": "https://github.com/rand0mdevel0per/schauto#readme",
   "engines": {
     "node": ">=18"
   },

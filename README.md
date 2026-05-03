@@ -1,6 +1,6 @@
-# chromium-stealth
+# schauto
 
-Chromium-based headless browser with kernel-level fingerprint randomization. Built by patching Chromium source directly — no JS-level overrides that can be detected by `Object.getOwnPropertyDescriptor`.
+Stealth Chromium automation framework with kernel-level fingerprint randomization. Built by patching Chromium source directly — no JS-level overrides that can be detected by `Object.getOwnPropertyDescriptor`.
 
 ## Features
 
@@ -24,7 +24,7 @@ Chromium-based headless browser with kernel-level fingerprint randomization. Bui
 ## Installation
 
 ```bash
-npm install chromium-stealth
+npm install schauto
 ```
 
 The package ships with the patched Chromium binary (~400MB). First install will take a while.
@@ -32,7 +32,7 @@ The package ships with the patched Chromium binary (~400MB). First install will 
 ## Usage
 
 ```typescript
-import { Browser } from 'chromium-stealth'
+import { Browser } from 'schauto'
 
 const browser = await Browser.launch({
   proxy: 'socks5://user:pass@proxy.example.com:1080',
@@ -60,7 +60,7 @@ await browser.close()
 ## Architecture
 
 ```
-chromium-stealth/
+schauto/
 ├── src/                    TS source (Browser, BrowserContext, Page, Mouse, ImageHelper, CDP client)
 ├── chromium-patches/       FingerprintToolkit C++ source (copied into Chromium tree at build time)
 ├── patches/                Unified diffs applied to Chromium source
