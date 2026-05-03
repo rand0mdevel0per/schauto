@@ -1,0 +1,7 @@
+--- a/third_party/blink/renderer/platform/fonts/font_cache.cc
++++ b/third_party/blink/renderer/platform/fonts/font_cache.cc
+
+ // In FontCache::GetFontData() or SystemFontFamily enumeration:
++  // Filter system fonts through FingerprintToolkit allowlist
++  auto* tk = GetFingerprintToolkit();
++  if (tk) available_fonts = tk->FilterFonts(available_fonts);

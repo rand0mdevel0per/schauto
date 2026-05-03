@@ -1,0 +1,35 @@
+# Build outputs
+dist/
+node_modules/
+node_modules_backup/
+
+# Chromium source (huge, not for git)
+chromium-src/
+
+# Workflow / agent meta
+.workflow/
+.claude/
+
+# gclient state
+build/.gclient
+build/.gclient_entries
+
+# Logs and temp files
+*.log
+test-result.png
+test-output.txt
+test-proxy.log
+test3-output.txt
+test2.js
+test3.js
+test-proxy.js
+smoke-test.js
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

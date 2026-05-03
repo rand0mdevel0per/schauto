@@ -1,0 +1,7 @@
+--- a/third_party/webrtc/p2p/base/port.cc
++++ b/third_party/webrtc/p2p/base/port.cc
+
+ // In Port::AddAddress() — filter local IPs, only allow relay/proxy candidates
++  if (address.IsLoopbackIP() || address.IsPrivateIP()) {
++    return;  // suppress local IP candidates
++  }

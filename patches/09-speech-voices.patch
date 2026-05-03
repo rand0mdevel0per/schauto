@@ -1,0 +1,13 @@
+--- a/third_party/blink/renderer/modules/speech/speech_synthesis.cc
++++ b/third_party/blink/renderer/modules/speech/speech_synthesis.cc
+
+ // In SpeechSynthesis::getVoices() — filter to only return voices matching toolkit language
++  auto* tk = GetFrame()->GetFingerprintToolkit();
++  if (!tk) return voices_;
++  String lang = tk->GetLanguage();
++  SpeechSynthesisVoiceList filtered;
++  for (auto& voice : voices_) {
++    if (voice->lang().StartsWith(lang.Left(2)))
++      filtered.push_back(voice);
++  }
++  return filtered.IsEmpty() ? voices_ : filtered;

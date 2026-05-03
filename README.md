@@ -1,0 +1,152 @@
+# chromium-stealth
+
+Chromium-based headless browser with kernel-level fingerprint randomization. Built by patching Chromium source directly — no JS-level overrides that can be detected by `Object.getOwnPropertyDescriptor`.
+
+## Features
+
+- **Fingerprint randomization at C++ level** via `FingerprintToolkit` (per-context xorshift64 seed)
+  - Canvas / WebGL image data noise
+  - AudioContext buffer perturbation
+  - ClientRects coordinate jitter
+  - WebGL vendor / renderer spoofing
+  - Navigator hardwareConcurrency, platform
+  - SpeechSynthesis voices filtering
+  - Timezone spoofing
+  - Font allowlist filtering
+  - WebRTC IP leak prevention (proxy-bound)
+- **No-window mode** (kernel-level, not just `--headless` flag)
+- **Auto geo-match from proxy IP** (timezone, language, platform via ip-api.com → ipwho.is → ipapi.co fallback chain)
+- **Built-in AdBlock Plus** MV3 extension (auto-loaded)
+- **SOCKS5 / HTTP proxy** support
+- **Bezier mouse curves** with jitter for captcha solving
+- **Image API**: full-page screenshot, region screenshot, element screenshot, boundingBox
+
+## Installation
+
+```bash
+npm install chromium-stealth
+```
+
+The package ships with the patched Chromium binary (~400MB). First install will take a while.
+
+## Usage
+
+```typescript
+import { Browser } from 'chromium-stealth'
+
+const browser = await Browser.launch({
+  proxy: 'socks5://user:pass@proxy.example.com:1080',
+  // or 'http://127.0.0.1:7890'
+})
+
+const ctx = await browser.newContext()
+const page = await ctx.newPage()
+
+await page.goto('https://bot.sannysoft.com/')
+
+const png = await page.image.screenshot()
+require('fs').writeFileSync('result.png', png)
+
+// Mouse with Bezier curve + jitter (anti-captcha)
+await page.mouse.move(100, 100, { x: 500, y: 400 })
+await page.mouse.click(500, 400)
+
+// Element screenshot
+const cropped = await page.image.screenshotElement('#captcha-image')
+
+await browser.close()
+```
+
+## Architecture
+
+```
+chromium-stealth/
+├── src/                    TS source (Browser, BrowserContext, Page, Mouse, ImageHelper, CDP client)
+├── chromium-patches/       FingerprintToolkit C++ source (copied into Chromium tree at build time)
+├── patches/                Unified diffs applied to Chromium source
+│   ├── 00-local-frame-toolkit.patch    LocalFrame member injection
+│   ├── 00b-frame-init-toolkit.patch    LocalFrame::Init() reads CLI flags
+│   ├── 01-no-window.patch              No-window mode
+│   ├── 02-canvas-noise.patch           Canvas data noise
+│   ├── 03-webgl-spoof.patch            WebGL VENDOR/RENDERER override
+│   ├── 04-audio-noise.patch            AudioContext buffer noise
+│   ├── 05-client-rects.patch           ClientRects coordinate jitter
+│   ├── 06-navigator.patch              Navigator API spoofing
+│   ├── 07-webrtc-ip.patch              WebRTC IP leak prevention
+│   ├── 08-timezone.patch               Timezone spoofing
+│   ├── 09-speech-voices.patch          SpeechSynthesis voices
+│   └── 10-font-filter.patch            Font allowlist
+├── build/                  Build scripts
+│   ├── fetch-chromium.sh   Fetches Chromium source via gclient
+│   ├── apply-patches.py    Applies patches programmatically
+│   ├── apply-patches.sh    Wrapper
+│   └── args.gn             Chromium build args (Release, no-symbols, no-component, etc.)
+├── extensions/
+│   └── adblock-plus/       MV3 extension auto-loaded into every context
+└── dist/                   Compiled JS (output of `npm run build`)
+```
+
+## Building from source
+
+Requires:
+- Windows 10/11 with Visual Studio 2019+ Build Tools
+- `depot_tools` from Chromium project
+- ~150GB disk space, 16GB+ RAM, several hours
+
+```bash
+# 1. Fetch Chromium (slow, ~80GB)
+./build/fetch-chromium.sh
+
+# 2. Apply patches
+python build/apply-patches.py
+
+# 3. Configure GN
+cd chromium-src/src
+cp ../../build/args.gn out/Release/args.gn
+gn gen out/Release
+
+# 4. Compile (4-8 hours)
+ninja -C out/Release chrome
+
+# 5. Build npm package
+cd ../..
+npm run build
+```
+
+## API
+
+### `Browser.launch(opts: LaunchOptions): Promise<Browser>`
+
+```typescript
+interface LaunchOptions {
+  proxy?: string              // 'socks5://...' or 'http://...'
+  executablePath?: string     // Override chrome.exe path
+}
+```
+
+### `BrowserContext`
+- `newPage(): Promise<Page>`
+- `close(): Promise<void>`
+
+### `Page`
+- `goto(url: string): Promise<void>`
+- `evaluate<T>(fn: string | Function, ...args): Promise<T>`
+- `$(selector): Promise<string | null>`
+- `screenshot(): Promise<Buffer>`
+- `close(): Promise<void>`
+- `mouse: Mouse` — Bezier-curve mouse helper
+- `image: ImageHelper` — screenshot helpers
+
+### `ImageHelper`
+- `screenshot(): Promise<Buffer>`
+- `screenshotRegion(x, y, w, h): Promise<Buffer>`
+- `screenshotElement(selector): Promise<Buffer | null>`
+- `boundingBox(selector): Promise<{x, y, width, height} | null>`
+
+### `Mouse`
+- `move(from: {x,y}, to: {x,y}): Promise<void>` — Bezier curve with jitter
+- `click(x, y): Promise<void>`
+
+## License
+
+MIT

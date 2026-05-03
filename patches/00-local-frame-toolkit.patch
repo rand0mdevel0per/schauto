@@ -1,0 +1,13 @@
+--- a/third_party/blink/renderer/core/frame/local_frame.h
++++ b/third_party/blink/renderer/core/frame/local_frame.h
+@@ -1,3 +1,5 @@
++#include "third_party/blink/renderer/core/privacy/fingerprint_toolkit.h"
++
+ // Add to LocalFrame class private members:
++  std::unique_ptr<FingerprintToolkit> fingerprint_toolkit_;
++
+ // Add public accessor:
++  FingerprintToolkit* GetFingerprintToolkit() { return fingerprint_toolkit_.get(); }
++  void SetFingerprintToolkit(std::unique_ptr<FingerprintToolkit> tk) {
++    fingerprint_toolkit_ = std::move(tk);
++  }

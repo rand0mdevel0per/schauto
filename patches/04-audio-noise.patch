@@ -1,0 +1,8 @@
+--- a/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
++++ b/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
+@@ -1,3 +1,4 @@
++#include "third_party/blink/renderer/core/privacy/fingerprint_toolkit.h"
+
+ // In AudioBuffer::getChannelData(), before returning the Float32Array:
++  auto* toolkit = GetDocument().GetFrame()->GetFingerprintToolkit();
++  if (toolkit) toolkit->PerturbAudioBuffer(array->Data(), array->length());

@@ -1,0 +1,7 @@
+is_debug = false
+is_component_build = false
+enable_nacl = false
+use_gl = "angle"
+enable_extensions = true
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"

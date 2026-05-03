@@ -1,0 +1,58 @@
+{
+  "name": "chromium-stealth",
+  "version": "0.1.0",
+  "description": "Chromium-based headless browser with kernel-level fingerprint randomization. Patches Chromium source directly for undetectable Canvas/WebGL/Audio/Navigator/Timezone spoofing.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "src/",
+    "patches/",
+    "chromium-patches/",
+    "extensions/",
+    "build/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "chromium",
+    "headless",
+    "browser",
+    "stealth",
+    "fingerprint",
+    "anti-bot",
+    "captcha",
+    "scraping",
+    "automation",
+    "cdp",
+    "webdriver",
+    "puppeteer-alternative",
+    "playwright-alternative"
+  ],
+  "author": "rand0mdevel0per",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rand0mdevel0per/chromium-stealth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rand0mdevel0per/chromium-stealth/issues"
+  },
+  "homepage": "https://github.com/rand0mdevel0per/chromium-stealth#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "proxy-agent": "^6.4.0",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.0.0"
+  }
+}

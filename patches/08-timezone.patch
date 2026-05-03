@@ -1,0 +1,6 @@
+--- a/third_party/blink/renderer/core/timezone/timezone_controller.cc
++++ b/third_party/blink/renderer/core/timezone/timezone_controller.cc
+
+ // In TimezoneController::GetTimezoneId():
++  auto* tk = GetFrame()->GetFingerprintToolkit();
++  if (tk && !tk->GetTimezone().IsEmpty()) return tk->GetTimezone();

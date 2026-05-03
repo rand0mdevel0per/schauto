@@ -1,0 +1,13 @@
+--- a/third_party/blink/renderer/core/dom/element.cc
++++ b/third_party/blink/renderer/core/dom/element.cc
+@@ -1,3 +1,4 @@
++#include "third_party/blink/renderer/core/privacy/fingerprint_toolkit.h"
+
+ // In Element::getBoundingClientRect(), before returning DOMRect:
++  auto* toolkit = GetDocument().GetFrame()->GetFingerprintToolkit();
++  if (toolkit) {
++    rect.setX(toolkit->PerturbRect(rect.x()));
++    rect.setY(toolkit->PerturbRect(rect.y()));
++    rect.setWidth(toolkit->PerturbRect(rect.width()));
++    rect.setHeight(toolkit->PerturbRect(rect.height()));
++  }

@@ -1,0 +1,6 @@
+--- a/ui/views/widget/widget.cc
++++ b/ui/views/widget/widget.cc
+
+ // In Widget::Show():
++  if (base::CommandLine::ForCurrentProcess()->HasSwitch("no-window"))
++    return;
