@@ -1,0 +1,33 @@
+name: CI (TypeScript)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        node-version: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Verify dist
+        run: |
+          test -f dist/index.js
+          test -f dist/index.d.ts
+          test -f dist/browser.js
+          test -f dist/cdp-client.js
+          ls -la dist/

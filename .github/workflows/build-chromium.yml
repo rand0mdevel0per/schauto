@@ -1,0 +1,231 @@
+name: Build Chromium (matrix)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_os:
+        description: 'Target OS to build (or "all")'
+        required: false
+        default: 'all'
+        type: choice
+        options: [all, linux, macos, windows]
+      chromium_ref:
+        description: 'Chromium ref to checkout (commit or tag)'
+        required: false
+        default: 'main'
+  schedule:
+    # Weekly nightly build (Sunday 02:00 UTC)
+    - cron: '0 2 * * 0'
+  push:
+    tags:
+      - 'v*'  # Build & release on every version tag
+
+permissions:
+  contents: write       # to upload release artifacts
+  actions: read
+
+jobs:
+  # =====================================================
+  # Build matrix: Linux (Ubuntu), macOS (arm64+x64), Windows
+  # =====================================================
+  build:
+    name: ${{ matrix.os }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target_os == 'all' || github.event.inputs.target_os == matrix.os_short }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os_short: linux
+            os: ubuntu-22.04
+            arch: x64
+            runner: ubuntu-22.04
+            chromium_target: chrome
+            artifact_name: chromium-stealth-linux-x64
+          - os_short: macos
+            os: macos-14
+            arch: arm64
+            runner: macos-14
+            chromium_target: chrome
+            artifact_name: chromium-stealth-macos-arm64
+          - os_short: macos
+            os: macos-13
+            arch: x64
+            runner: macos-13
+            chromium_target: chrome
+            artifact_name: chromium-stealth-macos-x64
+          - os_short: windows
+            os: windows-2022
+            arch: x64
+            runner: windows-2022
+            chromium_target: chrome
+            artifact_name: chromium-stealth-windows-x64
+    timeout-minutes: 720   # 12h max for full Chromium build
+    steps:
+      - name: Checkout schauto
+        uses: actions/checkout@v4
+        with:
+          path: schauto
+
+      - name: Free disk space (Ubuntu)
+        if: matrix.os_short == 'linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL "$AGENT_TOOLSDIRECTORY"
+          docker rmi $(docker image ls -aq) 2>/dev/null || true
+          df -h
+
+      - name: Install depot_tools (Linux/macOS)
+        if: matrix.os_short != 'windows'
+        run: |
+          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools
+          echo "$HOME/depot_tools" >> $GITHUB_PATH
+
+      - name: Install depot_tools (Windows)
+        if: matrix.os_short == 'windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://storage.googleapis.com/chrome-infra/depot_tools.zip" -OutFile "$env:USERPROFILE\depot_tools.zip"
+          Expand-Archive "$env:USERPROFILE\depot_tools.zip" -DestinationPath "$env:USERPROFILE\depot_tools" -Force
+          echo "$env:USERPROFILE\depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "DEPOT_TOOLS_WIN_TOOLCHAIN=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Cache Chromium source
+        id: cache-chromium-src
+        uses: actions/cache@v4
+        with:
+          path: chromium-src
+          key: chromium-src-${{ matrix.os_short }}-${{ matrix.arch }}-${{ github.event.inputs.chromium_ref || 'main' }}-v3
+          restore-keys: |
+            chromium-src-${{ matrix.os_short }}-${{ matrix.arch }}-
+
+      - name: Fetch Chromium source (gclient)
+        if: steps.cache-chromium-src.outputs.cache-hit != 'true'
+        timeout-minutes: 240
+        run: |
+          mkdir -p chromium-src
+          cd chromium-src
+          fetch --no-history --nohooks chromium
+          cd src
+          gclient runhooks
+        shell: bash
+
+      - name: Apply schauto source modifications
+        run: |
+          python3 schauto/build/apply-patches.py \
+            --chromium-src "$PWD/chromium-src/src" \
+            --schauto-root "$PWD/schauto"
+        shell: bash
+
+      - name: Configure GN (Linux/macOS)
+        if: matrix.os_short != 'windows'
+        run: |
+          cd chromium-src/src
+          mkdir -p out/Release
+          cp ../../schauto/build/args.gn out/Release/args.gn
+          gn gen out/Release
+
+      - name: Configure GN (Windows)
+        if: matrix.os_short == 'windows'
+        shell: pwsh
+        run: |
+          cd chromium-src/src
+          mkdir -Force out/Release
+          Copy-Item ../../schauto/build/args.gn out/Release/args.gn
+          gn gen out/Release
+
+      - name: Build Chromium (ninja)
+        timeout-minutes: 480
+        run: |
+          cd chromium-src/src
+          ninja -C out/Release ${{ matrix.chromium_target }}
+        shell: bash
+
+      - name: Package Chromium binary
+        shell: bash
+        run: |
+          cd chromium-src/src/out/Release
+          mkdir -p $GITHUB_WORKSPACE/dist
+          if [ "${{ matrix.os_short }}" = "windows" ]; then
+            7z a -mx=9 $GITHUB_WORKSPACE/dist/${{ matrix.artifact_name }}.7z \
+              chrome.exe chrome.dll *.bin *.pak resources/ locales/ \
+              icudtl.dat snapshot_blob.bin v8_context_snapshot.bin || true
+          elif [ "${{ matrix.os_short }}" = "macos" ]; then
+            tar -cJf $GITHUB_WORKSPACE/dist/${{ matrix.artifact_name }}.tar.xz \
+              "Chromium.app" || tar -cJf $GITHUB_WORKSPACE/dist/${{ matrix.artifact_name }}.tar.xz chrome
+          else
+            tar -cJf $GITHUB_WORKSPACE/dist/${{ matrix.artifact_name }}.tar.xz \
+              chrome chrome_sandbox *.bin *.pak resources/ locales/ \
+              icudtl.dat snapshot_blob.bin v8_context_snapshot.bin || true
+          fi
+          ls -lh $GITHUB_WORKSPACE/dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.artifact_name }}.*
+          retention-days: 14
+
+  # =====================================================
+  # Optional: BSD cross-compile (FreeBSD via QEMU)
+  # NOTE: Chromium does not officially support BSD; this
+  # job is best-effort and may fail. Disabled by default.
+  # =====================================================
+  build-bsd:
+    name: freebsd / x64 (best-effort)
+    runs-on: ubuntu-22.04
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_os == 'bsd' }}
+    timeout-minutes: 720
+    steps:
+      - name: Checkout schauto
+        uses: actions/checkout@v4
+      - name: Build in FreeBSD VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y git python3 ninja gn llvm-devel
+          run: |
+            echo "Chromium FreeBSD build is community-only and not supported by upstream."
+            echo "This job is left as scaffolding; needs custom port-style patches."
+
+  # =====================================================
+  # Release: package + npm publish on tag
+  # =====================================================
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          draft: false
+          prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') }}
+          generate_release_notes: true
+
+  npm-publish:
+    name: Publish to npm
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

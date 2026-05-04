@@ -7,6 +7,13 @@ import { BrowserContext } from './context'
 export interface LaunchOptions {
   proxy?: string
   executablePath?: string
+  // Hard overrides (skip geo-resolver if any of these are provided)
+  timezone?: string         // e.g. "Asia/Tokyo"
+  language?: string         // e.g. "ja-JP"
+  platform?: string         // "Win32" | "MacIntel" | "Linux x86_64"
+  latitude?: number
+  longitude?: number
+  countryCode?: string
 }
 
 export class Browser {
@@ -21,27 +28,60 @@ export class Browser {
   }
 
   static async launch(opts: LaunchOptions = {}): Promise<Browser> {
-    const geo = opts.proxy
+    const hasOverride = opts.timezone || opts.language || opts.platform
+    const baseGeo = opts.proxy && !hasOverride
       ? await resolveProxyGeo(opts.proxy)
       : { timezone: 'America/New_York', language: 'en-US', platform: 'Win32',
           latitude: 37.77, longitude: -122.41, country_code: 'US' }
+
+    // Apply overrides
+    const geo: GeoInfo = {
+      timezone: opts.timezone ?? baseGeo.timezone,
+      language: opts.language ?? baseGeo.language,
+      platform: opts.platform ?? baseGeo.platform,
+      latitude: opts.latitude ?? baseGeo.latitude,
+      longitude: opts.longitude ?? baseGeo.longitude,
+      country_code: opts.countryCode ?? baseGeo.country_code,
+    }
 
     const bin = opts.executablePath
       ?? resolve(__dirname, '../chromium-src/src/out/Release/chrome.exe')
 
     const args = [
-      '--no-window',
+      // Use --headless=new (Chrome's modern headless mode) instead of patched --no-window
+      // because --no-window breaks the compositor → Page.captureScreenshot hangs.
+      // TODO: fix --no-window patch to keep off-screen rendering.
+      '--headless=new',
       '--remote-debugging-port=0',
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      `--load-extension=${resolve(__dirname, '../extensions/adblock-plus')}`,
+      // Anti-automation flags (no recompile needed)
+      '--disable-blink-features=AutomationControlled',
+      '--exclude-switches=enable-automation',
+      '--disable-features=Translate,InterestFeedContentSuggestions,CalculateNativeWinOcclusion',
+      // Locale override (Chrome reads --lang for navigator.language)
+      `--lang=${geo.language}`,
+      `--accept-lang=${geo.language},${geo.language.split('-')[0]},en`,
+      // Custom flags read by FingerprintToolkit (when patches active)
       `--fingerprint-timezone=${geo.timezone}`,
       `--fingerprint-language=${geo.language}`,
       `--fingerprint-platform=${geo.platform}`,
+      `--load-extension=${resolve(__dirname, '../extensions/adblock-plus')}`,
     ]
     if (opts.proxy) args.push(`--proxy-server=${opts.proxy}`)
 
-    const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    // ICU reads TZ env var → makes Intl.DateTimeFormat() return spoofed timezone
+    // even without recompiled FingerprintToolkit timezone hook.
+    const env = {
+      ...process.env,
+      TZ: geo.timezone,
+      LANG: `${geo.language.replace('-', '_')}.UTF-8`,
+    }
+
+    const proc = spawn(bin, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env,
+    })
 
     const wsUrl = await new Promise<string>((res, rej) => {
       let buf = ''
@@ -66,5 +106,9 @@ export class Browser {
   async close() {
     await this.cdp.send('Browser.close').catch(() => {})
     this.proc.kill()
+  }
+
+  get pid(): number | undefined {
+    return this.proc.pid
   }
 }

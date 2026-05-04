@@ -34,9 +34,20 @@ The package ships with the patched Chromium binary (~400MB). First install will 
 ```typescript
 import { Browser } from 'schauto'
 
+// Auto: detect timezone/language from proxy IP
 const browser = await Browser.launch({
   proxy: 'socks5://user:pass@proxy.example.com:1080',
-  // or 'http://127.0.0.1:7890'
+})
+
+// Or override manually
+const browser2 = await Browser.launch({
+  proxy: 'http://127.0.0.1:7890',
+  timezone: 'Asia/Tokyo',
+  language: 'ja-JP',
+  platform: 'Win32',         // 'MacIntel' | 'Linux x86_64'
+  latitude: 35.6762,
+  longitude: 139.6503,
+  countryCode: 'JP',
 })
 
 const ctx = await browser.newContext()
@@ -56,6 +67,26 @@ const cropped = await page.image.screenshotElement('#captcha-image')
 
 await browser.close()
 ```
+
+## Fingerprint protection layers
+
+schauto applies fingerprint protection at three layers:
+
+| Layer | Mechanism | Status |
+|-------|-----------|--------|
+| **CDP emulation** (no recompile) | `Emulation.setTimezoneOverride`, `setLocaleOverride`, `setGeolocationOverride`, `setUserAgentOverride` | ✅ Active |
+| **CLI flags** (no recompile) | `--disable-blink-features=AutomationControlled`, `--exclude-switches=enable-automation`, `--lang`, `--accept-lang` | ✅ Active |
+| **Kernel patches** (recompile required) | `FingerprintToolkit` C++ class for Canvas/WebGL/Audio/ClientRects/Font noise | 🚧 Scaffolding present, real injection in progress |
+
+The CDP+CLI layers already give you:
+- ✅ `navigator.webdriver = false`
+- ✅ `Intl.DateTimeFormat().resolvedOptions().timeZone` returns spoofed value
+- ✅ `navigator.language` / `navigator.languages` match proxy geo
+- ✅ `navigator.userAgent` platform-matched
+- ✅ Native TLS JA4 fingerprint of real Chrome (not detectable as automation)
+- ✅ Geolocation API returns spoofed lat/lon
+
+The kernel-patch layer is what adds the harder-to-fake noise (Canvas pixel jitter, WebGL vendor spoof, AudioContext perturbation). These need a custom Chromium build via the GitHub Actions workflow.
 
 ## Architecture
 
@@ -121,6 +152,13 @@ npm run build
 interface LaunchOptions {
   proxy?: string              // 'socks5://...' or 'http://...'
   executablePath?: string     // Override chrome.exe path
+  // Hard overrides (skip geo-resolver if any of these are provided)
+  timezone?: string           // 'Asia/Tokyo', 'America/New_York', etc.
+  language?: string           // 'ja-JP', 'en-US', etc.
+  platform?: string           // 'Win32' | 'MacIntel' | 'Linux x86_64'
+  latitude?: number
+  longitude?: number
+  countryCode?: string
 }
 ```
 

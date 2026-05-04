@@ -16,13 +16,14 @@ build/.gclient_entries
 
 # Logs and temp files
 *.log
-test-result.png
+*.png
 test-output.txt
 test-proxy.log
 test3-output.txt
 test2.js
 test3.js
 test-proxy.js
+debug-spawn.js
 smoke-test.js
 
 # OS
