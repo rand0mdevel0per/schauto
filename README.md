@@ -39,16 +39,34 @@ const browser = await Browser.launch({
   proxy: 'socks5://user:pass@proxy.example.com:1080',
 })
 
-// Or override manually
-const browser2 = await Browser.launch({
+// Mobile device profile + GMS spoofing for Google services
+const phone = await Browser.launch({
   proxy: 'http://127.0.0.1:7890',
+  device: 'Pixel 7',           // or 'iPhone 14 Pro' / 'Samsung Galaxy S23' / 'iPad Pro' / 'Desktop Win' / etc.
+  gms: true,                   // inject chrome.runtime, getBattery, vibrate, GSF/Ad ID
   timezone: 'Asia/Tokyo',
   language: 'ja-JP',
-  platform: 'Win32',         // 'MacIntel' | 'Linux x86_64'
-  latitude: 35.6762,
-  longitude: 139.6503,
-  countryCode: 'JP',
 })
+
+// Custom DeviceProfile
+import { DeviceProfile } from 'schauto'
+const customDevice: DeviceProfile = {
+  name: 'My Test Device',
+  userAgent: 'Mozilla/5.0 (Linux; Android 14; CustomPhone) AppleWebKit/537.36...',
+  platform: 'Linux armv8l',
+  mobile: true,
+  brand: 'Google Chrome', brandVersion: '148', fullVersion: '148.0.7654.123',
+  screen: { width: 360, height: 800, dpr: 3 },
+  viewport: { width: 360, height: 800 },
+  touchPoints: 5, hasTouch: true,
+  hardwareConcurrency: 8, deviceMemory: 8,
+  webglVendor: 'Google Inc. (ARM)',
+  webglRenderer: 'ANGLE (ARM, Mali-G77 MC9, OpenGL ES 3.2)',
+  webglUnmaskedVendor: 'ARM',
+  webglUnmaskedRenderer: 'Mali-G77 MC9',
+  android: { deviceModel: 'CustomPhone', androidVersion: '14', apiLevel: 34, chromeMajor: 148 },
+}
+const customBrowser = await Browser.launch({ device: customDevice })
 
 const ctx = await browser.newContext()
 const page = await ctx.newPage()
@@ -67,6 +85,55 @@ const cropped = await page.image.screenshotElement('#captcha-image')
 
 await browser.close()
 ```
+
+## Device profiles
+
+Built-in presets (use by name):
+
+| Name | Platform | UA family | Touch | Notes |
+|------|----------|-----------|-------|-------|
+| `Desktop Win` | Win32 | Chrome 148 / Win10 | No | NVIDIA GTX 1660 |
+| `Desktop Mac` | MacIntel | Chrome 148 / macOS | No | Apple M2 |
+| `Desktop Linux` | Linux x86_64 | Chrome 148 / Linux | No | Mesa Intel UHD 620 |
+| `Pixel 7` | Linux armv8l | Chrome 148 / Android 14 | Yes (5pts) | ARM Mali-G710, GMS-ready |
+| `Pixel 8 Pro` | Linux armv8l | Chrome 148 / Android 14 | Yes (5pts) | ARM Immortalis-G715, GMS-ready |
+| `Samsung Galaxy S23` | Linux armv8l | Chrome 148 / Android 14 | Yes (10pts) | Adreno 740 |
+| `iPhone 14 Pro` | iPhone | Safari 17.5 / iOS 17 | Yes (5pts) | Apple A16 GPU |
+| `iPad Pro` | iPad | Safari 17.5 / iPadOS 17 | Yes (10pts) | Apple M2 GPU |
+
+Or define your own via `DeviceProfile` interface.
+
+## GMS (Google Mobile Services) simulation
+
+Pass `gms: true` along with an Android device profile to enable:
+
+- `window.chrome.runtime` / `chrome.app` (Google sign-in probes these)
+- `navigator.getBattery()`, `navigator.vibrate()`
+- `window.DeviceOrientationEvent`, `window.DeviceMotionEvent`
+- `navigator.connection` returns `{ type: 'cellular', effectiveType: '4g' }`
+- `screen.orientation` returns `'portrait-primary'`
+- `matchMedia('(pointer: coarse)')` matches, `(hover: hover)` doesn't
+- Generated GSF ID, Advertising ID, Build ID exposed via `window.__schauto_gms`
+
+```typescript
+const b = await Browser.launch({
+  device: 'Pixel 7',
+  gms: {
+    gsfId: 'abc123def456...',           // optional, generated if omitted
+    adId: 'aaaaaaaa-...',                // optional UUID v4
+    playStoreVersion: '40.5.21-29',
+    gmsCoreVersion: '24.20.13',
+  }
+})
+```
+
+**Limitations** (require real Android hardware, not bypassable from a browser):
+- ❌ Play Integrity API hardware-backed attestation
+- ❌ SafetyNet attestation tokens
+- ❌ DroidGuard challenge-response (closed-source)
+- ❌ Real GMS gRPC endpoints with device cert signing
+
+What this gets you: ~80% of *web-based* Google service detection, including Google account signup flow, OAuth web flows, and most Google sign-in surfaces.
 
 ## Fingerprint protection layers
 

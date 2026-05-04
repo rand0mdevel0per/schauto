@@ -1,7 +1,7 @@
 {
   "name": "schauto",
-  "version": "0.1.1",
-  "description": "Stealth Chromium automation framework with kernel-level fingerprint randomization. Patches Chromium source directly for undetectable Canvas/WebGL/Audio/Navigator/Timezone spoofing.",
+  "version": "0.2.0",
+  "description": "Stealth Chromium automation framework with kernel-level fingerprint randomization, device profiles (Pixel/iPhone/Samsung), GMS environment simulation. Bypass Cloudflare/anti-bot via real Chrome 148 TLS JA4 + per-device WebGL/Canvas/UA spoof.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
