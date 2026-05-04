@@ -8,7 +8,7 @@ on:
         required: false
         default: 'all'
         type: choice
-        options: [all, linux, macos, windows]
+        options: [all, linux, macos, windows, bsd]
       chromium_ref:
         description: 'Chromium ref to checkout (commit or tag)'
         required: false
@@ -26,40 +26,43 @@ permissions:
 
 jobs:
   # =====================================================
+  # Compute matrix dynamically (filter by target_os input)
+  # =====================================================
+  setup:
+    name: Setup matrix
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        shell: bash
+        run: |
+          target='${{ github.event.inputs.target_os }}'
+          if [ -z "$target" ]; then target='all'; fi
+          full='[
+            {"os_short":"linux","os":"ubuntu-22.04","arch":"x64","runner":"ubuntu-22.04","chromium_target":"chrome","artifact_name":"schauto-linux-x64"},
+            {"os_short":"macos","os":"macos-14","arch":"arm64","runner":"macos-14","chromium_target":"chrome","artifact_name":"schauto-macos-arm64"},
+            {"os_short":"macos","os":"macos-13","arch":"x64","runner":"macos-13","chromium_target":"chrome","artifact_name":"schauto-macos-x64"},
+            {"os_short":"windows","os":"windows-2022","arch":"x64","runner":"windows-2022","chromium_target":"chrome","artifact_name":"schauto-windows-x64"}
+          ]'
+          if [ "$target" = "all" ]; then
+            echo "matrix=$(echo $full | jq -c .)" >> $GITHUB_OUTPUT
+          else
+            filtered=$(echo "$full" | jq -c "[.[] | select(.os_short == \"$target\")]")
+            echo "matrix=$filtered" >> $GITHUB_OUTPUT
+          fi
+
+  # =====================================================
   # Build matrix: Linux (Ubuntu), macOS (arm64+x64), Windows
   # =====================================================
   build:
+    needs: setup
     name: ${{ matrix.os }} / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target_os == 'all' || github.event.inputs.target_os == matrix.os_short }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os_short: linux
-            os: ubuntu-22.04
-            arch: x64
-            runner: ubuntu-22.04
-            chromium_target: chrome
-            artifact_name: chromium-stealth-linux-x64
-          - os_short: macos
-            os: macos-14
-            arch: arm64
-            runner: macos-14
-            chromium_target: chrome
-            artifact_name: chromium-stealth-macos-arm64
-          - os_short: macos
-            os: macos-13
-            arch: x64
-            runner: macos-13
-            chromium_target: chrome
-            artifact_name: chromium-stealth-macos-x64
-          - os_short: windows
-            os: windows-2022
-            arch: x64
-            runner: windows-2022
-            chromium_target: chrome
-            artifact_name: chromium-stealth-windows-x64
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
     timeout-minutes: 720   # 12h max for full Chromium build
     steps:
       - name: Checkout schauto
